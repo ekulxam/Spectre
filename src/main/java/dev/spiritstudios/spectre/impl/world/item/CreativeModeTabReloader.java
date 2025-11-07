@@ -17,6 +17,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.fabricmc.fabric.api.resource.v1.reloader.ResourceReloaderKeys;
 import net.fabricmc.fabric.api.resource.v1.reloader.SimpleResourceReloader;
+import net.fabricmc.fabric.impl.tag.TagAliasLoader;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -47,14 +48,21 @@ public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<Re
 	private static final FileToIdConverter LISTER = FileToIdConverter.json("spectre/creative_mode_tabs");
 
 	private CreativeModeTabsS2CPayload syncPayload;
-	private MinecraftServer server;
+
+	public static void register() {
+		ResourceLoader.get(PackType.SERVER_DATA).registerReloader(
+			ID,
+			new CreativeModeTabReloader()
+		);
+
+		ResourceLoader.get(PackType.SERVER_DATA).addReloaderOrdering(
+			ResourceLocation.fromNamespaceAndPath("fabric-tag-api-v1", "tag_alias_groups"),
+			ID
+		);
+	}
 
 	private CreativeModeTabReloader() {
-		// Hacky but it works
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> this.server = server);
-
-		ServerPlayerEvents.JOIN.register(player -> {
-			if (player.level().getServer().isSingleplayerOwner(player.nameAndId())) return;
+		ServerLifecycleEvents.SYNC_DATA_PACK_CONTENTS.register((player, joined) -> {
 			ServerPlayNetworking.send(player, syncPayload);
 		});
 	}
@@ -147,26 +155,5 @@ public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<Re
 		apply(prepared);
 
 		syncPayload = new CreativeModeTabsS2CPayload(prepared);
-
-		// If server is null, we are still starting up. There can't be any players yet, so we can just skip this.
-		if (server != null) {
-			for (ServerPlayer player : PlayerLookup.all(server)) {
-				if (server.isSingleplayerOwner(player.nameAndId())) continue;
-
-				ServerPlayNetworking.send(player, syncPayload);
-			}
-		}
-	}
-
-	public static void register() {
-		ResourceLoader.get(PackType.SERVER_DATA).registerReloader(
-			ID,
-			new CreativeModeTabReloader()
-		);
-
-		ResourceLoader.get(PackType.SERVER_DATA).addReloaderOrdering(
-			ResourceReloaderKeys.AFTER_VANILLA,
-			ID
-		);
 	}
 }

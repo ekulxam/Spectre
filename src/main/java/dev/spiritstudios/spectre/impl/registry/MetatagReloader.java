@@ -37,14 +37,22 @@ public final class MetatagReloader extends SimpleResourceReloader<List<MetatagCo
 	public static final ResourceLocation ID = Spectre.id("metatags");
 
 	private MetatagSyncS2CPayload syncPayload;
-	private MinecraftServer server;
+
+	public static void register() {
+		ResourceLoader.get(PackType.SERVER_DATA).registerReloader(
+			ID,
+			new MetatagReloader()
+		);
+
+		// Metatags need to come after dynamic registries
+		ResourceLoader.get(PackType.SERVER_DATA).addReloaderOrdering(
+			ResourceReloaderKeys.AFTER_VANILLA,
+			ID
+		);
+	}
 
 	private MetatagReloader() {
-		// Hacky but it works
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> this.server = server);
-
-		ServerPlayerEvents.JOIN.register(player -> {
-			if (player.level().getServer().isSingleplayerOwner(player.nameAndId())) return;
+		ServerLifecycleEvents.SYNC_DATA_PACK_CONTENTS.register((player, joined) -> {
 			ServerPlayNetworking.send(player, syncPayload);
 		});
 	}
@@ -132,28 +140,5 @@ public final class MetatagReloader extends SimpleResourceReloader<List<MetatagCo
 		syncPayload = new MetatagSyncS2CPayload(prepared.stream()
 			.filter(contents -> contents.metatag().packetCodec() != null)
 			.toList());
-
-
-		// If server is null, we are still starting up. There can't be any players yet, so we can just skip this.
-		if (server != null) {
-			for (ServerPlayer player : PlayerLookup.all(server)) {
-				if (server.isSingleplayerOwner(player.nameAndId())) continue;
-
-				ServerPlayNetworking.send(player, syncPayload);
-			}
-		}
-	}
-
-	public static void register() {
-		ResourceLoader.get(PackType.SERVER_DATA).registerReloader(
-			ID,
-			new MetatagReloader()
-		);
-
-		// Metatags need to come after dynamic registries
-		ResourceLoader.get(PackType.SERVER_DATA).addReloaderOrdering(
-			ResourceReloaderKeys.AFTER_VANILLA,
-			ID
-		);
 	}
 }
