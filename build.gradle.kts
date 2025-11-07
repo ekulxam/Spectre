@@ -17,6 +17,10 @@ base.archivesName = modId
 loom {
 	splitEnvironmentSourceSets()
 	accessWidenerPath = file("src/main/resources/spectre.accesswidener")
+
+	runs.forEach {
+		it.isIdeConfigGenerated = true
+	}
 }
 
 sourceSets {

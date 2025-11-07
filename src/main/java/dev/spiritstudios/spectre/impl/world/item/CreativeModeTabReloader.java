@@ -3,22 +3,20 @@ package dev.spiritstudios.spectre.impl.world.item;
 import com.google.gson.JsonParseException;
 import com.mojang.logging.LogUtils;
 import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.Lifecycle;
 import dev.spiritstudios.spectre.api.world.item.CreativeModeTabFile;
 import dev.spiritstudios.spectre.impl.Spectre;
 import dev.spiritstudios.spectre.impl.registry.UnfrozenRegistry;
 import dev.spiritstudios.spectre.mixin.world.item.CreativeModeTabAccessor;
 import dev.spiritstudios.spectre.mixin.registry.unfreeze.MappedRegistryAccessor;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
-import net.fabricmc.fabric.api.resource.v1.reloader.ResourceReloaderKeys;
 import net.fabricmc.fabric.api.resource.v1.reloader.SimpleResourceReloader;
-import net.fabricmc.fabric.impl.tag.TagAliasLoader;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -26,23 +24,26 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.tags.TagKey;
 import net.minecraft.util.StrictJsonParser;
 import net.minecraft.world.item.CreativeModeTab;
 import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<ResourceLocation, CreativeModeTabFile>> {
 	public static final ResourceLocation ID = Spectre.id("creative_mode_tabs");
+	public static final StateKey<List<Registry.PendingTags<?>>> PENDING_TAGS_KEY = new StateKey<>();
 
 	private static final Logger LOGGER = LogUtils.getLogger();
 	private static final FileToIdConverter LISTER = FileToIdConverter.json("spectre/creative_mode_tabs");
@@ -67,9 +68,67 @@ public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<Re
 		});
 	}
 
+	@SuppressWarnings("NullableProblems") //
 	@Override
 	protected Map<ResourceLocation, CreativeModeTabFile> prepare(SharedState store) {
-		HolderLookup.Provider registries = store.get(ResourceLoader.RELOADER_REGISTRY_LOOKUP_KEY);
+		HolderLookup.Provider delegate = store.get(ResourceLoader.RELOADER_REGISTRY_LOOKUP_KEY);
+
+		List<Registry.PendingTags<?>> pendingTags = store.get(PENDING_TAGS_KEY);
+		Map<ResourceKey<?>, Registry.PendingTags<?>> keyToTagMap = new IdentityHashMap<>();
+		pendingTags.forEach(tag -> keyToTagMap.put(tag.key(), tag));
+
+		HolderLookup.Provider registries = new HolderLookup.Provider() {
+			@Override
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistryKeys() {
+				return Stream.concat(delegate.listRegistryKeys(), pendingTags.stream().map(Registry.PendingTags::key));
+			}
+
+			@Override
+			public <T> Optional<? extends HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> registryKey) {
+				Optional<? extends HolderLookup.RegistryLookup<T>> optionalLookup = delegate.lookup(registryKey);
+				if (optionalLookup.isEmpty()) {
+					if (keyToTagMap.containsKey(registryKey)) {
+						return Optional.of((HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey));
+					}
+					return Optional.empty();
+				}
+				HolderLookup.RegistryLookup<T> delegateLookup = optionalLookup.get();
+				HolderLookup.RegistryLookup<T> pendingLookup = (HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey);
+				return Optional.of(new HolderLookup.RegistryLookup<T>() {
+
+					@Override
+					public Optional<Holder.Reference<T>> get(ResourceKey<T> resourceKey) {
+						return delegateLookup.get(resourceKey).or(() -> pendingLookup.get(resourceKey));
+					}
+
+					@Override
+					public Optional<HolderSet.Named<T>> get(TagKey<T> tagKey) {
+						return delegateLookup.get(tagKey).or(() -> pendingLookup.get(tagKey));
+					}
+
+					@Override
+					public Stream<Holder.Reference<T>> listElements() {
+						return Stream.concat(delegateLookup.listElements(), pendingLookup.listElements());
+					}
+
+					@Override
+					public Stream<HolderSet.Named<T>> listTags() {
+						return Stream.concat(delegateLookup.listTags(), pendingLookup.listTags());
+					}
+
+					@Override
+					public ResourceKey<? extends Registry<? extends T>> key() {
+						return delegateLookup.key();
+					}
+
+					@Override
+					public Lifecycle registryLifecycle() {
+						return delegateLookup.registryLifecycle().add(pendingLookup.registryLifecycle());
+					}
+				});
+			}
+		}
+
 		var ops = registries.createSerializationContext(JsonOps.INSTANCE);
 		Map<ResourceLocation, CreativeModeTabFile> output = new Object2ObjectOpenHashMap<>();
 
