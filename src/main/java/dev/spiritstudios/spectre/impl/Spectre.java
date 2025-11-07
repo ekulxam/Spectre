@@ -53,9 +53,9 @@ public final class Spectre implements ModInitializer {
 			CreativeModeTabsS2CPayload.CODEC
 		);
 
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, registrationEnvironment) -> {
+		CommandRegistrationCallback.EVENT.register((dispatcher, context, registrationEnvironment) -> {
 			ScreenshakeCommand.register(dispatcher);
-			MetatagCommand.register(dispatcher);
+			MetatagCommand.register(dispatcher, context);
 			ComponentsCommand.register(dispatcher);
 		});
 	}

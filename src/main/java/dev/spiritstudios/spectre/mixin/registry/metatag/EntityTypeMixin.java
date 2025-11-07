@@ -24,4 +24,10 @@ public abstract class EntityTypeMixin implements MetatagHolder<EntityType<?>> {
 	public <V> Optional<V> getData(MetatagKey<EntityType<?>, V> metatagKey) {
 		return builtInRegistryHolder.getData(metatagKey);
 	}
+
+	@SuppressWarnings("AddedMixinMembersNamePattern")
+	@Override
+	public <V> boolean hasData(MetatagKey<EntityType<?>, V> key) {
+		return builtInRegistryHolder.hasData(key);
+	}
 }

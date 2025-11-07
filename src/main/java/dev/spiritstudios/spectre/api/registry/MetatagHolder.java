@@ -23,4 +23,8 @@ public interface MetatagHolder<T> {
 	default <V> V getDataOrThrow(MetatagKey<T, V> key) {
 		return getData(key).orElseThrow();
 	}
+
+	default <V> boolean hasData(MetatagKey<T, V> key) {
+		return false;
+	}
 }

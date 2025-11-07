@@ -23,4 +23,10 @@ public abstract class BlockMixin implements MetatagHolder<Block> {
 	public <V> Optional<V> getData(MetatagKey<Block, V> metatagKey) {
 		return builtInRegistryHolder.getData(metatagKey);
 	}
+
+	@SuppressWarnings("AddedMixinMembersNamePattern")
+	@Override
+	public <V> boolean hasData(MetatagKey<Block, V> key) {
+		return builtInRegistryHolder.hasData(key);
+	}
 }

@@ -10,3 +10,4 @@
 
 ## 📔 About
 
+## TODO: Document system properties
