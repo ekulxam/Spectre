@@ -127,7 +127,7 @@ public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<Re
 					}
 				});
 			}
-		}
+		};
 
 		var ops = registries.createSerializationContext(JsonOps.INSTANCE);
 		Map<ResourceLocation, CreativeModeTabFile> output = new Object2ObjectOpenHashMap<>();
