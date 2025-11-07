@@ -88,12 +88,12 @@ public final class CreativeModeTabReloader extends SimpleResourceReloader<Map<Re
 				Optional<? extends HolderLookup.RegistryLookup<T>> optionalLookup = delegate.lookup(registryKey);
 				if (optionalLookup.isEmpty()) {
 					if (keyToTagMap.containsKey(registryKey)) {
-						return Optional.of((HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey));
+						return Optional.of((HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey).lookup());
 					}
 					return Optional.empty();
 				}
 				HolderLookup.RegistryLookup<T> delegateLookup = optionalLookup.get();
-				HolderLookup.RegistryLookup<T> pendingLookup = (HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey);
+				HolderLookup.RegistryLookup<T> pendingLookup = (HolderLookup.RegistryLookup<T>) keyToTagMap.get(registryKey).lookup();
 				return Optional.of(new HolderLookup.RegistryLookup<T>() {
 
 					@Override
